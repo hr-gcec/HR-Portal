@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; frame-src https://script.google.com https://*.googleusercontent.com https://accounts.google.com; connect-src 'none'; base-uri 'self'; form-action 'none'">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>GCEC Employee Workspace</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#efe7d6">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,700&family=Inter:wght@400;500;600&family=Space+Mono&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#efe7d6;--card:#faf6ec;--line:#e2d7bf;--navy:#1e2a48;--soft:#6d707f;--gold:#a27b46;--gold2:#d4a63f}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:var(--bg);color:var(--navy);font-family:'Inter',system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+  #app{position:fixed;inset:0;width:100%;height:100%;border:0;background:var(--bg);opacity:0;transition:opacity .35s}
+  #app.on{opacity:1}
+  .screen{position:fixed;inset:0;display:grid;place-items:center;padding:24px;z-index:2;transition:opacity .35s}
+  .screen.gone{opacity:0;pointer-events:none}
+  .box{text-align:center;max-width:460px}
+  .box img{width:84px;height:84px}
+  .loading img{animation:breathe 2.2s ease-in-out infinite}
+  @keyframes breathe{50%{transform:scale(1.05);opacity:.85}}
+  h1{font-family:'Fraunces',Georgia,serif;font-weight:700;font-size:24px;margin:18px 0 8px;line-height:1.2}
+  p{color:var(--soft);font-size:14px;line-height:1.5}
+  .label{font-family:'Space Mono',ui-monospace,monospace;font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--gold);margin-top:16px}
+  .slow{margin-top:22px;padding:16px 18px;background:var(--card);border:1px solid var(--line);border-radius:14px;display:none}
+  .slow.on{display:block}
+  .btn{display:inline-block;margin-top:12px;background:var(--navy);color:#fff;text-decoration:none;font-weight:600;font-size:14px;padding:10px 18px;border-radius:11px}
+  .btn:hover{background:#26375a}
+  .btn:focus-visible{outline:2px solid var(--gold2);outline-offset:2px}
+  code{font-family:'Space Mono',ui-monospace,monospace;font-size:12.5px;background:var(--card);border:1px solid var(--line);padding:1px 6px;border-radius:5px}
+  @media (prefers-reduced-motion:reduce){.loading img{animation:none}}
+</style>
+<script src="backend-config.js"></script>
+</head>
+<body>
+<div class="screen" id="screen" role="status" aria-live="polite">
+  <div class="box loading" id="box">
+    <img src="gcec-logo.png" alt="GCEC logo">
+    <h1>GCEC Employee Workspace</h1>
+    <p id="msg">Opening your workspace…</p>
+    <div class="slow" id="slow">
+      <p>This is taking longer than usual. Your browser may be blocking the embedded workspace, or you may need to sign in to your @gcecglobal.com Google account.</p>
+      <a class="btn" id="direct" href="#" target="_top" rel="noopener">Open the workspace directly</a>
+    </div>
+  </div>
+</div>
+<iframe id="app" title="GCEC Employee Workspace" allow="clipboard-write" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+
+<script>
+(function () {
+  'use strict';
+  var base = String(window.GCEC_WEB_APP_URL || '').trim();
+  var screen = document.getElementById('screen');
+  var box = document.getElementById('box');
+  var frame = document.getElementById('app');
+
+  // Not configured yet: tell HR exactly what to do.
+  if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(base)) {
+    box.classList.remove('loading');
+    document.getElementById('msg').innerHTML =
+      'The workspace link has not been set up yet.<br><br>HR: open <code>backend-config.js</code> in this GitHub repository and paste the Apps Script Web App URL (ending in <code>/exec</code>).';
+    return;
+  }
+
+  // Pass through options such as ?view=someone@gcecglobal.com (supervisor read-only view).
+  var url = base + (location.search || '');
+  document.getElementById('direct').href = url;
+
+  // Safari, Firefox and every iPhone/iPad browser block Google sign-in inside embedded pages.
+  // For those, open the workspace directly instead of showing a blank frame.
+  var ua = navigator.userAgent;
+  var isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var isSafari = /Safari\//.test(ua) && !/Chrome\/|Chromium\/|Edg\/|OPR\//.test(ua);
+  var isFirefox = /Firefox\//.test(ua);
+  if (isIOS || isSafari || isFirefox) { location.replace(url); return; }
+
+  var settled = false;
+  window.addEventListener('message', function (e) {
+    var okOrigin = /^https:\/\/([a-z0-9-]+\.)*(googleusercontent\.com|script\.google\.com)$/.test(e.origin);
+    if (!okOrigin || !e.data || typeof e.data.gcec !== 'string') return;
+    if (e.data.gcec === 'no-identity') { location.replace(url); return; }  // not signed in: go to Google directly
+    if (settled) return;
+    settled = true;
+    frame.classList.add('on');
+    screen.classList.add('gone');
+    setTimeout(function () { screen.style.display = 'none'; }, 400);
+  });
+
+  frame.src = url;
+  setTimeout(function () { if (!settled) document.getElementById('slow').classList.add('on'); }, 12000);
+})();
+</script>
+</body>
+</html>
